@@ -48,8 +48,8 @@ correlatedFeatures SimpleAnomalyDetector::createCorrFeaFromScratch(string fea,st
     return correlated;
  }
 
-bool SimpleAnomalyDetector::isHighCorr(float corr) {
-    return corr >= 0.9;
+bool SimpleAnomalyDetector::isHighCorr(float corr) {    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    return corr >= minForCorr;          // todo changed from 0.9
 }
 /**
  * gets a ts and use it to learn correlation between features.
@@ -70,7 +70,7 @@ void SimpleAnomalyDetector::learnNormal(const TimeSeries& ts){
         for (int j = i + 1; j < features.size(); j++) {
             string fea2 = features[j];
             // correlation between features
-            float pear = pearson(table[fea1].data(), table[fea2].data(), colSize);
+            float pear = pearson(table[fea1].data(), table[fea2].data(), colSize);  //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
             if (isHighCorr(fabs(pear)) && fabs(pear) > maxCor)  {    // todo: change 0.9 to generic & default
                 maxCor = fabs(pear);
                 matchedFea = fea2;

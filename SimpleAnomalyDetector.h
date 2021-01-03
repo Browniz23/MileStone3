@@ -22,6 +22,9 @@ struct correlatedFeatures{
 
 class SimpleAnomalyDetector:public TimeSeriesAnomalyDetector{
     vector<correlatedFeatures> cf;
+protected:
+    // minForCorr - the minimum correlation for correlation according lin_reg.
+    float minForCorr = 0.9;                //todo: changed!
 public:
     SimpleAnomalyDetector();
     virtual ~SimpleAnomalyDetector();
@@ -38,7 +41,6 @@ public:
                                      vector<string> features, int colSize, float corr);
     virtual correlatedFeatures createCorrFeaFromPoints(Point** points, string fea, string matchedFea, int colSize, float corr);
     virtual bool isHighCorr(float corr);
-
 
     //virtual void fillCorrelated(correlatedFeatures* correlatedP, Point** points, int colSize, float corr);
 };
