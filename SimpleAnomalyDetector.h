@@ -15,7 +15,6 @@ struct correlatedFeatures{
     float corrlation;
     Line lin_reg;
     float threshold;
-    //todo @@@@@@@@@@@@@@@@@@@@@@@@@@@@
     float x,y;
 };
 
@@ -24,7 +23,7 @@ class SimpleAnomalyDetector:public TimeSeriesAnomalyDetector{
     vector<correlatedFeatures> cf;
 protected:
     // minForCorr - the minimum correlation for correlation according lin_reg.
-    float minForCorr = 0.9;                //todo: changed!
+    float minForCorr = 0.9;
 public:
     SimpleAnomalyDetector();
     virtual ~SimpleAnomalyDetector();
@@ -35,14 +34,12 @@ public:
     vector<correlatedFeatures> getNormalModel(){
         return cf;
     }
-    // todo new methods
+    // new methods
     virtual float getPointDis(Point p, correlatedFeatures correlated);
     correlatedFeatures createCorrFeaFromScratch(string fea, string matchedFea, map<string, vector<float>> table,
                                      vector<string> features, int colSize, float corr);
     virtual correlatedFeatures createCorrFeaFromPoints(Point** points, string fea, string matchedFea, int colSize, float corr);
     virtual bool isHighCorr(float corr);
-
-    //virtual void fillCorrelated(correlatedFeatures* correlatedP, Point** points, int colSize, float corr);
 };
 
 #endif //FLIGHTSIMULATOR_SIMPLEANOMALYDETECTOR_H

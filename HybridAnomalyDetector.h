@@ -14,17 +14,13 @@ public:
     virtual float getPointDis(Point p, correlatedFeatures correlated); // todo: virtual?
     virtual correlatedFeatures createCorrFeaFromPoints(Point** points, string fea, string matchedFea, int colSize, float corr);
     virtual bool isHighCorr(float corr);
-    //todo: changed!
+    // new methods
     virtual void setMinForCorr(float min) {
         minForCorr = min;
     }
     virtual float getMinForCorr() {
         return minForCorr;
     }
-
-    //virtual correlatedFeatures createCorrFea(string fea, string matchedFea, map<string, vector<float>> table,
-    //vector<string> features, int colSize, float corr);
-    //virtual void fillCorrelated(correlatedFeatures* correlatedP, Point** points, int colSize, float corr);
 };
 
 #endif /* HYBRIDANOMALYDETECTOR_H_ */

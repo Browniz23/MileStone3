@@ -4,28 +4,25 @@ CLI::CLI(DefaultIO* dio1) {
     dio = dio1;
 }
 
-void printMenu(DefaultIO* dio) {
-    dio->write("Welcome to the Anomaly Detection Server.\n");
-    dio->write("Please choose an option:\n");
-    dio->write("1.upload a time series csv file\n");
-    dio->write("2.algorithm settings\n");
-    dio->write("3.detect anomalies\n");
-    dio->write("4.display results\n");
-    dio->write("5.upload anomalies and analyze results\n");
-    dio->write("6.exit\n");
-}
 void CLI::start(){
     int option;
-  //  DataCollection data(dio);
-    PrintMenuCommand printMenu(dio);
-    UploadCSVCommand c1(dio);
-    ThresholdChangeCommand c2(dio, &ad);
-    DetectCommand c3(dio,&ad);
-    vector<AnomalyReport> ar;
+    DataCollection d(csvTrain, csvTest);
+    vector<Command*> macroCommands;
+    UploadCSVCommand c1(dio, &d);
+    macroCommands.push_back(&c1);
+    ThresholdChangeCommand c2(dio, &d);
+    macroCommands.push_back(&c2);
+    DetectCommand c3(dio, &d);
+    macroCommands.push_back(&c3);
+    PrintAnomalyRepCommand c4(dio, &d);
+    macroCommands.push_back(&c4);
+    TPFPCommand c5(dio,&d);
+    macroCommands.push_back(&c5);
+    ExitCommand c6(dio,&d);
+    macroCommands.push_back(&c6);
+    PrintMenuCommand printMenu(dio,&d, macroCommands);
     do {
         printMenu.execute();
-        PrintAnomalyRepCommand c4(dio, ar);
-        TPFPCommand c5(dio, c3.getTsTest(), c3.getAnomalyRep());
         dio->read(&option);
         switch (option) {
             case 1:
@@ -36,7 +33,6 @@ void CLI::start(){
                 break;
             case 3:
                 c3.execute();
-                ar = c3.getAnomalyRep();
                 break;
             case 4:
                 c4.execute();
@@ -45,14 +41,12 @@ void CLI::start(){
                 c5.execute();
                 break;
             case 6:
+                c6.execute();
                 break;
             default:
-                break;  //todo: wrong input?
+                break;
         }
     } while (option != 6);
 }
 
-
-CLI::~CLI() {
-}
-
+CLI::~CLI() {}

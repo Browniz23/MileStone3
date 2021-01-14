@@ -20,11 +20,11 @@ public:
 	virtual void write(string text)=0;
 	virtual void write(float f)=0;
 	virtual void read(float* f)=0;
-	virtual ~DefaultIO(){};             //todo: why???????? if =0 problem. now diferent one.
+	virtual ~DefaultIO(){};
 
 	// you may add additional methods here
 
-	// upload string to destFile (needs to be open). but we sent string!!!
+	// upload string to destFile (must be open).
     virtual void uploadFile(string line, ofstream& destFile) {
         destFile << line;
     }
@@ -35,29 +35,9 @@ public:
     }
 };
 
-/*
-class StandardIO: public DefaultIO {        // add virtual? * 3?
-public:
-    StandardIO();
-    ~StandardIO() override;
-    string read() override {
-        string text;
-        cin >> text;
-        return text;
-    }
-    void write(string text) override {
-        cout << text;
-    }
-    void write(float f) override {
-        cout << f;
-    }
-    void read(float* f) override {
-        cin >> *f;
-    }
-};*/
 // you may add here helper classes
 
-
+// class UnitedReports, contains reports: description, start of anomaly, end of anomaly.
 class UnitedReports{
 public:
     string description;
@@ -70,101 +50,188 @@ public:
     }
 };
 
-class DataCollection {              // needed?
-    DefaultIO* dio;
-    HybridAnomalyDetector* had;
+class DataCollection {
+protected:
+    HybridAnomalyDetector had;
     vector<AnomalyReport> ar;
     vector<UnitedReports> unitedAr;
     vector<pair<int,int>> anomalies;
+    int colLength = 0;
+    const char* trainFile;
+    const char* testFile;
 public:
     DataCollection() {}
+    DataCollection(const char* file1, const char* file2) {
+        trainFile = file1;
+        testFile = file2;
+    }
     friend class UniteAnomalies;
-
-    HybridAnomalyDetector* getHybridAnomalyDetector() {
-        return had;
-    }
-    vector<AnomalyReport> getAnomalyReports() {
-        return ar;
-    }
-    vector<UnitedReports> getUnitedReports() {
-        return unitedAr;
-    }
-    vector<pair<int,int>> getAnomalies() {
-        return anomalies;
-    }
+    friend class ReportsAnalysis;
+    friend class ThresholdChangeCommand;
+    friend class SendAnomalies;
+    friend class TPFPCommand;
+    friend class PrintAnomalyRepCommand;
+    friend class DetectCommand;
+    friend class UploadCSVCommand;
 };
 
-class DataCollection;
 // you may edit this class
 class Command{
 protected:
 	DefaultIO* dio;
 	string description;
+	DataCollection* data;
 public:
-	Command(DefaultIO* dio):dio(dio){}
+	Command(DefaultIO* dio, DataCollection* d):dio(dio),data(d){}
+    friend class DataCollection;
 	virtual void execute()=0;
 	virtual ~Command(){}
     string getDescription() {
         return description;
     }
-    friend class DataCollection;
 };
 
 // implement here your command classes
 
-// gets reports and have united reports
-class UniteAnomalies: public Command {
-    //vector<AnomalyReport> ar;
-    // int counts num of anomalies per description.
-    //vector<UnitedReports> unitedAr;
-    DataCollection data;
+class PrintMenuCommand:public Command {
+    vector<Command*> commands;
 public:
-    explicit UniteAnomalies(DefaultIO* dio/*, vector<AnomalyReport> reps*/, DataCollection dataC) : Command(dio)/*,ar(reps)*/, data(dataC) {}
-    // base on ordered according description, and in same description according timestep.
+    explicit PrintMenuCommand(DefaultIO* dio, DataCollection* d, vector<Command*> c) : Command(dio,d),commands(c) {}
     void execute() override {
-        vector<AnomalyReport> ar = data.ar;
+        dio->write("Welcome to the Anomaly Detection Server.\n");
+        dio->write("Please choose an option:\n");
+        for (Command* c : commands) {
+            dio->write(c->getDescription());
+        }
+    }
+};
+
+// read file (got its name from description).
+class TransferCSVFile: public Command {
+public:
+    explicit TransferCSVFile(DefaultIO* dio, DataCollection* d, const char* fileName) : Command(dio,d) {
+        description = fileName;
+    }
+    void execute() override {
+        ofstream destFile;
+        destFile.open(description);
+        string line = dio->read();              // here
+        while (line != "done") {
+            line.append("\n");
+            dio->uploadFile(line, destFile);
+            line = dio->read();
+        }
+        destFile.close();
+    }
+};
+
+// MACRO 1. transfer 2 csv files.
+class UploadCSVCommand: public Command {
+public:
+    explicit UploadCSVCommand(DefaultIO* dio, DataCollection* d) : Command(dio, d) {
+        description = "1.upload a time series csv file\n";
+    }
+    void execute() override {
+        // maybe can change PrintMessage so can set the message (and create one appearence).
+        dio->write("Please upload your local train CSV file.\n");
+        TransferCSVFile two(dio, data, data->trainFile);
+        two.execute();
+        dio->write("Upload complete.\n");
+        dio->write("Please upload your local test CSV file.\n");
+        TransferCSVFile five(dio, data, data->testFile);
+        five.execute();
+        dio->write("Upload complete.\n");
+    }
+};
+
+// MACRO 2. changing threshold
+class ThresholdChangeCommand: public Command {
+public:
+    ThresholdChangeCommand(DefaultIO *dio, DataCollection* d) : Command(dio, d){
+        description = "2.algorithm settings\n";
+    }
+    void execute() override {
+        dio->write("The current correlation threshold is ");
+        dio->write(data->had.getMinForCorr());
+        dio->write("\nType a new threshold\n");
+        float newThreshold;
+        dio->read(&newThreshold);
+        while (newThreshold < 0 || newThreshold > 1) {
+            dio->write("please choose a value between 0 and 1.");
+            dio->read(&newThreshold);
+        }
+        data->had.setMinForCorr(newThreshold);
+    }
+};
+
+// MACRO 3. learnNormal and detect anomalies.
+class DetectCommand: public Command {
+public:
+    DetectCommand(DefaultIO *dio,DataCollection* d) : Command(dio,d){
+        description = "3.detect anomalies\n";
+    }
+    void execute() override {
+        TimeSeries tsTrain(data->trainFile);
+        TimeSeries tsTest(data->testFile);
+        data->had.learnNormal(tsTrain);
+        data->ar = data->had.detect(tsTest);
+        data->colLength = tsTest.getColLength();
+        dio->write("anomaly detection complete.\n");
+    }
+};
+
+// print AnomalyReports (description and time step).
+class PrintAnomalyRepCommand: public Command {
+public:
+    PrintAnomalyRepCommand(DefaultIO *dio, DataCollection* d) : Command(dio, d){
+        description = "4.display results\n";
+    }
+    void execute() override {
+        for (AnomalyReport report : data->ar) {
+            dio->write(report.timeStep);
+            dio->write("\t ");
+            dio->write(report.description);
+            dio->write("\n");
+        }
+        dio->write("Done.\n");
+    }
+};
+
+// create united reports from reports vector.
+class UniteAnomalies: public Command {
+public:
+    explicit UniteAnomalies(DefaultIO* dio, DataCollection* dataC) : Command(dio,dataC) {}
+    // base on ordered according description, and in same description according timestep.
+    friend class DataCollection;
+    void execute() override {
         vector<UnitedReports> unitedAr;
-        for (AnomalyReport a : ar) {
+        for (AnomalyReport a : data->ar) {
             if (!unitedAr.empty() && unitedAr.back().description == a.description && unitedAr.back().last == a.timeStep-1) {
                 unitedAr.back().last++;
             } else {
                 unitedAr.push_back(UnitedReports(a.description, a.timeStep, a.timeStep));
             }
         }
-        data.unitedAr = data.unitedAr;
-    }
-
-    vector<UnitedReports> getUnitedReports() {
-     //   return unitedAr;
+        data->unitedAr = unitedAr;
     }
 };
 
-class ReportsAnalysis: public Command {              // needed?
-    //TimeSeries ts;
-    //vector<UnitedReports> unitedAr;
-    //vector<pair<int,int>> anomalies;
-    TimeSeries ts;
-    DataCollection data;
+// create TP and FP rate, using anomalies vector and united reports.
+class ReportsAnalysis: public Command {
 public:
-    explicit ReportsAnalysis(DefaultIO* dio, DataCollection d, TimeSeries rows) :Command(dio), data(d),ts(rows)/*, vector<UnitedReports> united,
-                             vector<pair<int,int>> known, TimeSeries rows) :Command(dio),ts(rows) */{
-        //unitedAr = united;
-        //anomalies = known;
-    }
+    explicit ReportsAnalysis(DefaultIO* dio, DataCollection* d) :Command(dio, d) {}
     void execute() override {
-        vector<UnitedReports> unitedAr = data.getUnitedReports();
-        vector<pair<int,int>> anomalies = data.getAnomalies();
-        float P = anomalies.size(), N = ts.getColLength();
+        float P = data->anomalies.size(), N = data->colLength;
         float FP =0, TP = 0;
-        for (pair<int,int> foundAno : anomalies) {
+        for (pair<int,int> foundAno : data->anomalies) {
             N -= foundAno.second - foundAno.first + 1;
         }
-        for (UnitedReports reported : unitedAr) {
+        for (UnitedReports reported : data->unitedAr) {
             bool isFalse = true;
-            for (pair<int,int> foundAno : anomalies) {
+            for (pair<int,int> foundAno : data->anomalies) {
                 if ((reported.first >= foundAno.first && reported.first <= foundAno.second) ||
-                        (reported.last >= foundAno.first && reported.last <= foundAno.second) ||
-                        (reported.first <= foundAno.first && reported.last >= foundAno.second)) {
+                    (reported.last >= foundAno.first && reported.last <= foundAno.second) ||
+                    (reported.first <= foundAno.first && reported.last >= foundAno.second)) {
                     TP++;
                     isFalse = false;
                     break;
@@ -187,13 +254,10 @@ public:
     }
 };
 
-// gets lines of anomalies and have vector of anomalise (int int).
-class SendAnomalies: public Command {              // needed?
-    HybridAnomalyDetector* had;
-    vector<AnomalyReport> ar;
-    vector<pair<int,int>> anomalies;
+// gets lines of anomalies and create vector of anomalies (int start int end).
+class SendAnomalies: public Command {
 public:
-    explicit SendAnomalies(DefaultIO* dio) : Command(dio) {}
+    explicit SendAnomalies(DefaultIO* dio, DataCollection* d) : Command(dio, d) {}
     void execute() override {
         string line = dio->read();
         while (line != "done") {
@@ -203,165 +267,38 @@ public:
             stringstream second(line.substr(pos+1));
             first >> anomaly.first;
             second >> anomaly.second;
-            anomalies.push_back(anomaly);
+            data->anomalies.push_back(anomaly);
             line = dio->read();
         }
     }
-
-    vector<pair<int,int>> getAnomalies() {
-        return anomalies;
-    }
 };
 
+// MACRO 5. call unitedAnomalies, SendAnomalies and ReportAnalysis.
 class TPFPCommand: public Command {
-    vector<UnitedReports> united;
-    vector<pair<int,int>> anomalies;
-    TimeSeries ts;
-    DataCollection d;
 public:
-    explicit TPFPCommand(DefaultIO* dio, TimeSeries rows, vector<AnomalyReport> reports, DataCollection d)
-            : Command(dio),ts(rows),d(d) {
-        UniteAnomalies unitedC(dio,d);//,reports);
-        unitedC.execute();
-        united = unitedC.getUnitedReports();
+    explicit TPFPCommand(DefaultIO* dio, DataCollection* d): Command(dio,d){
+        description = "5.upload anomalies and analyze results\n";
     }
-
     void execute() override {
+        UniteAnomalies unitedC(dio,data);
+        unitedC.execute();
         dio->write("Please upload your local anomalies file.\n");
-        SendAnomalies c1(dio);
+        data->anomalies.clear();
+        SendAnomalies c1(dio,data);
         c1.execute();
         dio->write("Upload complete.\n");
-        anomalies = c1.getAnomalies();
-        ReportsAnalysis re(dio,d,ts);//, united, anomalies, ts);
+        ReportsAnalysis re(dio,data);
         re.execute();
     }
 };
 
-class PrintMenuCommand:public Command {
+class ExitCommand:public Command {
 public:
-    explicit PrintMenuCommand(DefaultIO* dio) : Command(dio) {}
-    void execute() override {
-        dio->write("Welcome to the Anomaly Detection Server.\n");
-        dio->write("Please choose an option:\n");
-        dio->write("1.upload a time series csv file\n");
-        dio->write("2.algorithm settings\n");
-        dio->write("3.detect anomalies\n");
-        dio->write("4.display results\n");
-        dio->write("5.upload anomalies and analyze results\n");
-        dio->write("6.exit\n");
-    }
-};
-
-class PrintMessage: public Command {
-public:
-    explicit PrintMessage(DefaultIO* dio, string des) : Command(dio) {
-            description = des;
+    explicit ExitCommand(DefaultIO* dio, DataCollection* d): Command(dio,d) {
+        description = "6.exit\n";
     }
     void execute() override {
-        dio->write(description);
-    }
-};
-
-// maybe need to split to 2 commands
-class TransferCSVFile: public Command {  // i think we ignore the "open file" and considering its open.
-public:
-    explicit TransferCSVFile(DefaultIO* dio, string fileName) : Command(dio) {
-        description = fileName;   // todo ?
-    }
-    void execute() override {           // todo: maybe line includes\need to includes \n.
-        ofstream destFile;
-        //destFile.open(description); // needs to open in server (in folder?)
-        destFile.open(description);
-        string line = dio->read();
-        while (line != "done") {                    // todo: \n?
-            line.append("\n");
-            dio->uploadFile(line, destFile);            // hope its fine!     //@@@@@@@@@@@@@@@@@@@@@@@@@@22
-           // destFile << line;
-            line = dio->read();
-        }
-        destFile.close();
-    }
-};
-
-// now class for reading file and class for sending file?
-class UploadCSVCommand: public Command {
-public:
-    explicit UploadCSVCommand(DefaultIO* dio) : Command(dio) {
-        description = "1. upload a time series csv file\n";
-    }
-    void execute() override {
-        // maybe can change PrintMessage so can set the message (and create one appearence).
-        PrintMessage one(dio, "Please upload your local train CSV file.\n");  // need to be to client not dio!
-        TransferCSVFile two(dio,"anomalyTrain.csv");    // need to be to client not dio!
-        PrintMessage three(dio, "Upload complete.\n");
-        PrintMessage four(dio, "Please upload your local test CSV file.\n");  // need to be to client not dio!
-        TransferCSVFile five(dio, "anomalyTest.csv");    // need to be to client not dio!
-        PrintMessage six(dio, "Upload complete.\n");
-        one.execute();
-        two.execute();
-        three.execute();
-        four.execute();
-        five.execute();
-        six.execute();
-    }
-};
-
-
-class ThresholdChangeCommand: public Command {
-    HybridAnomalyDetector* ad;          //  changed to pointer
-public:
-    ThresholdChangeCommand(DefaultIO *dio, HybridAnomalyDetector* had) : Command(dio), ad(had){};
-    void execute() override {
-        dio->write("The current correlation threshold is ");
-        dio->write(ad->getMinForCorr());
-        dio->write("\nType a new threshold\n");
-        float newThreshold;
-        dio->read(&newThreshold);
-        while (newThreshold < 0 || newThreshold > 1) {
-            dio->write("please choose a value between 0 and 1.");
-            dio->read(&newThreshold);
-        }
-        ad->setMinForCorr(newThreshold);
-    }
-};
-
-class DetectCommand: public Command {
-    HybridAnomalyDetector* ad;              // chenged o pointer
-    vector<AnomalyReport> ar;
-    TimeSeries tsTrain = TimeSeries("anomalyTrain.csv");        // todo: how do i move the line from the server(output) to ts???
-    TimeSeries tsTest = TimeSeries("anomalyTest.csv");
-public:
-    DetectCommand(DefaultIO *dio, HybridAnomalyDetector* had) : Command(dio), ad(had){};
-    void execute() override {
-
-        ad->learnNormal(tsTrain);// todo: maybe send every line (in first) to file we create on server? with fileIO
-        ar = ad->detect(tsTest);
-        dio->write("anomaly detection complete.\n");
-    }
-    vector<AnomalyReport> getAnomalyRep() {
-        return ar;
-    }
-
-    TimeSeries getTsTrain() {
-        return tsTrain;
-    }
-    TimeSeries getTsTest() {
-        return tsTest;
-    }
-};
-
-class PrintAnomalyRepCommand: public Command {
-    vector<AnomalyReport> ar;
-public:
-    PrintAnomalyRepCommand(DefaultIO *dio, vector<AnomalyReport> reports) : Command(dio), ar(reports){};
-    void execute() override {
-        for (AnomalyReport report : ar) {
-            dio->write(report.timeStep);
-            dio->write("\t ");
-            dio->write(report.description);
-            dio->write("\n");
-        }
-        dio->write("Done.\n");      // \n?
+        // free memory if needed
     }
 };
 

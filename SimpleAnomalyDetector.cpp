@@ -36,11 +36,7 @@ correlatedFeatures SimpleAnomalyDetector::createCorrFeaFromScratch(string fea,st
         Point *p = new Point(table[fea][i], table[matchedFea][i]);
         points[i] = p;
     }
-/*
-    correlatedFeatures correlated = {fea, matchedFea, corr};
-    fillCorrelated(&correlated,points,colSize, corr);*/
     correlatedFeatures correlated = createCorrFeaFromPoints(points, fea, matchedFea, colSize, corr);
-
     for (int i = 0; i < colSize; ++i) {
         delete points[i];
     }
@@ -48,8 +44,8 @@ correlatedFeatures SimpleAnomalyDetector::createCorrFeaFromScratch(string fea,st
     return correlated;
  }
 
-bool SimpleAnomalyDetector::isHighCorr(float corr) {    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    return corr >= minForCorr;          // todo changed from 0.9
+bool SimpleAnomalyDetector::isHighCorr(float corr) {
+    return corr >= minForCorr;
 }
 /**
  * gets a ts and use it to learn correlation between features.
@@ -70,9 +66,9 @@ void SimpleAnomalyDetector::learnNormal(const TimeSeries& ts){
         for (int j = i + 1; j < features.size(); j++) {
             string fea2 = features[j];
             // correlation between features
-            float pear = pearson(table[fea1].data(), table[fea2].data(), colSize);  //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-            if (isHighCorr(fabs(pear)) && fabs(pear) > maxCor)  {    // todo: change 0.9 to generic & default
-                maxCor = fabs(pear);
+            float pear = pearson(table[fea1].data(), table[fea2].data(), colSize);
+            if (isHighCorr(fabs(pear)) && fabs(pear) > fabs(maxCor))  {  //change maxCor can be neg
+                maxCor = pear;                                           //change maxCor can be neg
                 matchedFea = fea2;
             }
         }
@@ -103,7 +99,7 @@ vector<AnomalyReport> SimpleAnomalyDetector::detect(const TimeSeries& ts){
     for (correlatedFeatures correlated: cf) {
         for (int i = 0; i < colLength; i++) {
             Point p(table[correlated.feature1][i], table[correlated.feature2][i]);
-            float dis = getPointDis(p, correlated);         // todo: dis in different method. V
+            float dis = getPointDis(p, correlated);
             if (dis > correlated.threshold) {
                 string description = correlated.feature1 + "-" + correlated.feature2;
                 AnomalyReport ar(description, i + 1);
@@ -115,21 +111,3 @@ vector<AnomalyReport> SimpleAnomalyDetector::detect(const TimeSeries& ts){
 }
 
 
-/*
-void SimpleAnomalyDetector::fillCorrelated(correlatedFeatures* correlatedP, Point** points,
-                                           int colSize, float corr) {
-    correlatedP->lin_reg = linear_reg(points, colSize);
-    float maxDis = 0;
-    float distance = 0;
-    for (int i = 0; i < colSize; i++) {
-        distance = fabs(correlatedP->lin_reg.f(points[i]->x) - points[i]->y);
-        if (distance > maxDis) {
-            maxDis = distance;
-        }
-    }
-    // making threshold a bit bigger for negligible cases.
-    maxDis = maxDis * 1.2;          //todo: generic
-    correlatedP->threshold = maxDis;
-    correlatedP->x=0;
-    correlatedP->y=0;
-}*/
