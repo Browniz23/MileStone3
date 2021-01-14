@@ -1,4 +1,4 @@
-// 316482355
+// 316482355 Oz Browner
 
 #ifndef MINCIRCLE_H_
 #define MINCIRCLE_H_

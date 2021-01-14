@@ -1,3 +1,5 @@
+// 316482355 Oz Browner
+
 #include "minCircle.h"
 
 // distance between 2 points

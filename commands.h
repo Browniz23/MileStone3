@@ -1,4 +1,4 @@
-
+// 316482355 Oz Browner
 
 #ifndef COMMANDS_H_
 #define COMMANDS_H_
@@ -115,7 +115,7 @@ public:
     void execute() override {
         ofstream destFile;
         destFile.open(description);
-        string line = dio->read();              // here
+        string line = dio->read();
         while (line != "done") {
             line.append("\n");
             dio->uploadFile(line, destFile);
@@ -132,7 +132,6 @@ public:
         description = "1.upload a time series csv file\n";
     }
     void execute() override {
-        // maybe can change PrintMessage so can set the message (and create one appearence).
         dio->write("Please upload your local train CSV file.\n");
         TransferCSVFile two(dio, data, data->trainFile);
         two.execute();

@@ -257,7 +257,6 @@ int main(){
         clientSide1(port,outputFile1);
         clientSide2(port,outputFile2);
         server.stop(); // joins the server's thread
-        cout << "endMain" << endl;
     }catch(const char* s){
         cout<<s<<endl;
     }
